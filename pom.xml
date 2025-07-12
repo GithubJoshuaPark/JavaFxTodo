@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.soro</groupId>
-    <artifactId>JavaFxEx01</artifactId>
+    <artifactId>JavaFxExTodo</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>JavaFxEx01</name>
 
