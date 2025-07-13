@@ -11,6 +11,7 @@ import javafx.scene.control.*;
 import javafx.scene.control.cell.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.Text;
 import javafx.stage.Stage;
 import javafx.scene.Scene;
 import javafx.util.Callback;
@@ -49,38 +50,6 @@ public class TodoApp extends Application {
     VBox inputBox          = new VBox(10, inputTitleField, inputDesField, hBoxForAddAndEdit);
     VBox root              = new VBox(10, inputBox, tableView);
     Scene scene            = new Scene(root, 800, 600);
-
-    @Override
-    public void start(Stage primaryStage) throws Exception {
-
-        primaryStage.setTitle("Todo Application");
-
-        // Initialize the TableView and its columns
-        initTableView();
-
-        // Add some sample data
-        setInitTodoList();
-
-        // TextField and Button for adding new todo items can be added here
-        initInputTitleField(inputTitleField, "Enter Title");
-        initInputTitleField(inputDesField, "Enter Description");
-        //inputDesField.setOnAction(e -> addButton.fire());
-
-        initAddButton();
-        initEditButton();
-
-        inputBox.setAlignment(Pos.CENTER_LEFT);
-        inputBox.setPadding(new Insets(10, 0, 10, 0));
-        inputBox.setStyle("-fx-background-color: #e0e0e0; -fx-padding: 10; -fx-border-color: #ccc; -fx-border-radius: 5");
-
-        // VBox layout for the scene
-        root.setAlignment(Pos.TOP_CENTER);
-        root.setPadding(new Insets(10));
-
-        // Secne which contains VBox root with 400, 300 dimensions
-        primaryStage.setScene(scene);
-        primaryStage.show();
-    }
 
     private void initEditButton() {
         editButton.setPrefWidth(60);
@@ -131,9 +100,19 @@ public class TodoApp extends Application {
     }
 
     private void initTableView() {
+
+        // TableView 스타일 지정
         tableView.setEditable(true);
+        tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        tableView.setStyle("-fx-font-size: 14px; -fx-background-color: #f0f0f0; -fx-border-color: #ccc; -fx-border-radius: 5");
+
+        // MARK: - 컬럼 설정 Start
         titleCol.setCellValueFactory(cellData ->cellData.getValue().titleProperty());
+        checkIsCompleteAndSetStrikeThroughStyle(titleCol);
+
         descriptionCol.setCellValueFactory(cellData ->cellData.getValue().descriptionProperty());
+        checkIsCompleteAndSetStrikeThroughStyle(descriptionCol);
+
         completedCol.setCellValueFactory(cellData -> cellData.getValue().completedProperty().asObject());
         // 이 부분이 핵심!
         completedCol.setCellFactory(CheckBoxTableCell.forTableColumn(index -> {
@@ -171,6 +150,12 @@ public class TodoApp extends Application {
             }
         });
 
+        titleCol.setPrefWidth(100);
+        descriptionCol.setPrefWidth(150);
+        completedCol.setPrefWidth(70);
+        deleteCol.setPrefWidth(60);
+        // MARK: - 컬럼 설정 End
+
         tableView.setRowFactory(tv -> {
             TableRow<TodoItem> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
@@ -192,23 +177,104 @@ public class TodoApp extends Application {
             return row;
         });
 
+        // 컬럼을 TableView에 추가
         tableView.getColumns().addAll(titleCol, descriptionCol, completedCol, deleteCol);
 
-        // TableView 컬럼 폭 및 스타일 지정
-        titleCol.setPrefWidth(100);
-        descriptionCol.setPrefWidth(150);
-        completedCol.setPrefWidth(70);
-        deleteCol.setPrefWidth(60);
+        for(TodoItem item: todoList) {
+            System.out.println("Todo Item: " + item.getTitle() + ", Completed: " + item.isCompleted());
+            item.completedProperty().addListener((observable
+                                                    , oldValue
+                                                    , newValue) -> tableView.refresh());
+        }
+        todoList.addListener((javafx.collections.ListChangeListener<TodoItem>) c -> {
+            while(c.next()) {
+                if (c.wasAdded()) {
+                    for (TodoItem item : c.getAddedSubList()) {
+                        System.out.println("Added Todo Item: " + item.getTitle() + ", Completed: " + item.isCompleted());
+                        item.completedProperty().addListener((observable, oldValue, newValue) -> {
+                            System.out.println("Todo Item Completed Status Changed: " + item.getTitle() + " to " + newValue);
+                            tableView.refresh(); // 상태 변경 시 테이블 새로고침
+                        });
+                    }
+                }
+                if (c.wasRemoved()) {
+                    for (TodoItem item : c.getRemoved()) {
+                        System.out.println("Removed Todo Item: " + item.getTitle() + ", Completed: " + item.isCompleted());
+                        item.completedProperty().removeListener((observable, oldValue, newValue) -> {
+                            System.out.println("Todo Item Completed Status Changed: " + item.getTitle() + " to " + newValue);
+                            tableView.refresh(); // 상태 변경 시 테이블 새로고침
+                        });
+                    }
+                }
+            }
+        });
+    }
 
-        // TableView 스타일 지정
-        tableView.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        tableView.setStyle("-fx-font-size: 14px; -fx-background-color: #f0f0f0; -fx-border-color: #ccc; -fx-border-radius: 5");
+    private void checkIsCompleteAndSetStrikeThroughStyle(TableColumn<TodoItem, String> titleCol) {
+        titleCol.setCellFactory(column -> new TableCell<TodoItem, String>() {
+
+            private final Text text = new Text();
+
+            // check if the content is completed, if so, apply a strikethrough style
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+
+                if (empty || getIndex() >= todoList.size()) {
+                    System.out.println(String.format("clicked on: %s", item));
+                    setText(null);
+                    setStyle(null);
+                } else {
+                    text.setText(item);
+                    TodoItem todoItem = getTableView().getItems().get(getIndex());
+
+                    System.out.println(String.format("clicked on: %s %b", item, todoItem.isCompleted()));
+
+                    text.setStrikethrough(todoItem.isCompleted()); // 여기서 줄긋기 ON/OFF
+                    text.setStyle(todoItem.isCompleted() ? "-fx-fill: #888;" : "-fx-fill: #111;");
+                    setGraphic(text); // 텍스트를 그래픽으로 설정, it means that the text will be displayed in the cell
+                    setText(null);    // 텍스트는 이미 Text 객체에 설정되어 있으므로 null로 설정
+                }
+            }
+        });
     }
 
     private void setInitTodoList() {
         todoList.add(new TodoItem("Buy groceries", "Milk, Bread, Eggs" ));
         todoList.add(new TodoItem("Walk the dog", "Evening walk in the park"));
         todoList.add(new TodoItem("Finish homework", "Math and Science assignments"));
+    }
+
+    @Override
+    public void start(Stage primaryStage) throws Exception {
+
+        primaryStage.setTitle("Todo Application");
+
+        // Add some sample data
+        setInitTodoList();
+
+        // Initialize the TableView and its columns
+        initTableView();
+
+        // TextField and Button for adding new todo items can be added here
+        initInputTitleField(inputTitleField, "Enter Title");
+        initInputTitleField(inputDesField, "Enter Description");
+        //inputDesField.setOnAction(e -> addButton.fire());
+
+        initAddButton();
+        initEditButton();
+
+        inputBox.setAlignment(Pos.CENTER_LEFT);
+        inputBox.setPadding(new Insets(10, 0, 10, 0));
+        inputBox.setStyle("-fx-background-color: #e0e0e0; -fx-padding: 10; -fx-border-color: #ccc; -fx-border-radius: 5");
+
+        // VBox layout for the scene
+        root.setAlignment(Pos.TOP_CENTER);
+        root.setPadding(new Insets(10));
+
+        // Secne which contains VBox root with 400, 300 dimensions
+        primaryStage.setScene(scene);
+        primaryStage.show();
     }
 
     public static void main(String[] args) {
